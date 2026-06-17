@@ -1,0 +1,37 @@
+name: Publish to npm (provenance)
+
+# Publishes n8n-nodes-clearedby to npm WITH provenance. n8n's verified-community-node
+# program (required for the in-app node panel + n8n Cloud) only accepts packages
+# built from a PUBLIC repo via CI with provenance — never a local `npm publish`.
+#
+# Trigger manually from the Actions tab ("Run workflow"), or by pushing a v* tag.
+# Requires one repo secret: NPM_TOKEN (an npm granular token with publish rights
+# for n8n-nodes-clearedby). Bump the version in package.json before each run —
+# npm rejects republishing an existing version.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  id-token: write # required for npm provenance signing (OIDC)
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: 'https://registry.npmjs.org'
+      # --ignore-scripts: skip transitive native builds (e.g. isolated-vm via
+      # n8n-workflow) we don't use; the lint plugin + TS types ship prebuilt.
+      - run: npm install --ignore-scripts
+      - run: npm run lint
+      - run: npm run build
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
